@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { aggregateLeaderboard } from '../lib/scoring'
+import { calculateBadges } from '../lib/badges'
 import BadgeDisplay from './BadgeDisplay'
 
 export default function Leaderboard({ roundId, results, showPredictions = false, onPlayerClick = null, games = [] }) {

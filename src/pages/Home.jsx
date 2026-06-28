@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestor
 import { db } from '../lib/firebase'
 import { calculateBadges } from '../lib/badges'
 import Countdown from '../components/Countdown'
+import NextGame from '../components/NextGame'
 import Leaderboard from '../components/Leaderboard'
 import RoundTabs from '../components/RoundTabs'
 import PredictionsModal from '../components/PredictionsModal'
@@ -110,6 +111,8 @@ export default function Home() {
         <h2 className="mb-2">{roundData.name}</h2>
         <p className="text-gray-600 text-sm uppercase tracking-wide">{roundData.games?.length || 0} Matches</p>
       </div>
+
+      <NextGame games={roundData?.games || []} results={results} />
 
       {deadline && <Countdown deadline={deadline} />}
 
