@@ -8,6 +8,7 @@ import NextGame from '../components/NextGame'
 import Leaderboard from '../components/Leaderboard'
 import RoundTabs from '../components/RoundTabs'
 import PredictionsModal from '../components/PredictionsModal'
+import MatchPredictionsModal from '../components/MatchPredictionsModal'
 
 // How often to re-check the API for new results while a tab stays open.
 const AUTO_FETCH_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
@@ -21,6 +22,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [nextMatch, setNextMatch] = useState(null) // resolved {gameId, teamA, teamB}
+  const [showMatchPredictions, setShowMatchPredictions] = useState(false)
 
   // Mirror latest results into a ref so the auto-fetch effect can read them
   // without re-subscribing every time results change.
@@ -169,7 +172,22 @@ export default function Home() {
 
       <div className="mb-12" />
 
-      <NextGame games={roundData?.games || []} results={results} />
+      <NextGame
+        games={roundData?.games || []}
+        results={results}
+        onMatchResolved={setNextMatch}
+      />
+
+      {deadlinePassed && nextMatch && (
+        <div className="-mt-8 mb-12 text-center">
+          <button
+            onClick={() => setShowMatchPredictions(true)}
+            className="border-2 border-black text-black font-600 text-sm uppercase tracking-wide px-6 py-3 hover:bg-gray-100 transition-colors"
+          >
+            👁 Show everyone's predictions for this match
+          </button>
+        </div>
+      )}
 
       {deadline && <Countdown deadline={deadline} />}
 
@@ -206,6 +224,17 @@ export default function Home() {
           games={roundData?.games || []}
           results={results}
           onClose={() => setSelectedPlayer(null)}
+        />
+      )}
+
+      {showMatchPredictions && nextMatch && (
+        <MatchPredictionsModal
+          roundId={activeRound}
+          gameId={nextMatch.gameId}
+          teamA={nextMatch.teamA}
+          teamB={nextMatch.teamB}
+          result={results.find(r => r.gameId === nextMatch.gameId) || null}
+          onClose={() => setShowMatchPredictions(false)}
         />
       )}
     </main>

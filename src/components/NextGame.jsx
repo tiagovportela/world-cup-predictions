@@ -1,12 +1,32 @@
 import { useState, useEffect } from 'react'
-import { fetchNextWorldCupGame, fetchLiveWorldCupGame } from '../lib/footballApi'
+import { fetchNextWorldCupGame, fetchLiveWorldCupGame, findGameByTeams } from '../lib/footballApi'
 
 // How often to refresh the in-progress match score.
 const LIVE_POLL_MS = 45 * 1000 // 45 seconds
 
-export default function NextGame({ games = [], results = [] }) {
+export default function NextGame({ games = [], results = [], onMatchResolved = null }) {
   const [apiGame, setApiGame] = useState(null)
   const [liveGame, setLiveGame] = useState(null)
+
+  // Report which local game is currently being shown, so the parent can offer
+  // a "view predictions for this match" action tied to the right gameId.
+  useEffect(() => {
+    if (!onMatchResolved) return
+
+    let resolved = null
+    const source = liveGame || apiGame
+    if (source) {
+      const g = findGameByTeams(source.teamA, source.teamB, games)
+      if (g) resolved = { gameId: g.id || g.gameId, teamA: g.teamA, teamB: g.teamB }
+    } else {
+      const local = games.find(game => {
+        const r = results.find(x => x.gameId === (game.id || game.gameId))
+        return !r
+      })
+      if (local) resolved = { gameId: local.id || local.gameId, teamA: local.teamA, teamB: local.teamB }
+    }
+    onMatchResolved(resolved)
+  }, [liveGame, apiGame, games, results, onMatchResolved])
 
   // Fetch the next upcoming match once on mount
   useEffect(() => {

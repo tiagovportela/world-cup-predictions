@@ -234,6 +234,19 @@ tbody tr:hover {
   text-transform: uppercase;
 }
 
+/* Outlined variant — same shape as .badge but border only, no fill */
+.badge-outline {
+  display: inline-block;
+  padding: 4px 10px;
+  background: transparent;
+  color: #1a1a1a;
+  border: 2px solid #1a1a1a;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 0;
+}
+
 .badge.gold {
   background: #ff9800;
   color: #ffffff;

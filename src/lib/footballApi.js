@@ -142,6 +142,24 @@ export function matchResultsByTeams(apiResults, gameTeams) {
   return matched
 }
 
+// Find the local game (Portuguese names) that corresponds to a pair of team
+// names (which may be English from the API or Portuguese from local data).
+// Returns the matching game object or null.
+export function findGameByTeams(teamA, teamB, games) {
+  const aEn = toEnglish(teamA)
+  const bEn = toEnglish(teamB)
+  return (
+    games.find(g => {
+      const gA = toEnglish(g.teamA)
+      const gB = toEnglish(g.teamB)
+      return (
+        (namesMatch(gA, aEn) && namesMatch(gB, bEn)) ||
+        (namesMatch(gA, bEn) && namesMatch(gB, aEn))
+      )
+    }) || null
+  )
+}
+
 export async function fetchLiveWorldCupGame() {
   try {
     const data = await callFootballFunction('IN_PLAY,PAUSED')

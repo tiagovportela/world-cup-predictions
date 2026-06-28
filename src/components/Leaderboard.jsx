@@ -62,11 +62,19 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
             <th className="w-12 text-center">#</th>
             <th className="text-left">Player</th>
             <th className="w-32 text-center">Score</th>
+            <th className="w-20 text-center">Exact</th>
             {showPredictions && <th className="w-40">Predictions</th>}
           </tr>
         </thead>
         <tbody>
-          {leaderboard.map((player, idx) => (
+          {leaderboard.map((player, idx) => {
+            const exactCount = (player.predictions || []).filter(p => {
+              const r = results.find(x => x.gameId === p.gameId)
+              return r && r.scoreA != null && r.scoreB != null &&
+                p.scoreA === r.scoreA && p.scoreB === r.scoreB
+            }).length
+
+            return (
             <tr
               key={`${player.userName}-${idx}`}
               className={`hover:bg-gray-100 transition-colors ${
@@ -102,13 +110,17 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
                   {player.totalScore}
                 </span>
               </td>
+              <td className="text-center">
+                <span className="badge-outline">{exactCount}</span>
+              </td>
               {showPredictions && (
                 <td className="text-sm text-gray-600">
                   {player.predictions?.length ? `${player.predictions.length} predictions` : '—'}
                 </td>
               )}
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>
