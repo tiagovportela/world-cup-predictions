@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { aggregateLeaderboard } from '../lib/scoring'
+import BadgeDisplay from './BadgeDisplay'
 
-export default function Leaderboard({ roundId, results, showPredictions = false, onPlayerClick = null }) {
+export default function Leaderboard({ roundId, results, showPredictions = false, onPlayerClick = null, games = [] }) {
   const [leaderboard, setLeaderboard] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -23,7 +24,14 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
       q,
       (snapshot) => {
         const submissions = snapshot.docs.map(doc => ({ ...doc.data() }))
-        const ranked = aggregateLeaderboard(submissions, results)
+
+        // Calculate badges for each player
+        const submissionsWithBadges = submissions.map(sub => ({
+          ...sub,
+          badges: calculateBadges(sub.predictions, results, games),
+        }))
+
+        const ranked = aggregateLeaderboard(submissionsWithBadges, results)
         setLeaderboard(ranked)
         setLoading(false)
       },
@@ -35,7 +43,7 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
     )
 
     return () => unsubscribe()
-  }, [roundId, results])
+  }, [roundId, results, games])
 
   if (loading) {
     return <div className="text-center py-12 text-gray-500">Loading leaderboard...</div>
@@ -72,11 +80,16 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
                 {idx > 2 && <span className="text-gray-600">{idx + 1}</span>}
               </td>
               <td className="font-500 text-black">
-                {showPredictions && onPlayerClick ? (
-                  <span className="hover:underline">{player.userName}</span>
-                ) : (
-                  player.userName
-                )}
+                <div className="flex items-center gap-3">
+                  {showPredictions && onPlayerClick ? (
+                    <span className="hover:underline cursor-pointer">{player.userName}</span>
+                  ) : (
+                    <span>{player.userName}</span>
+                  )}
+                  {player.badges && player.badges.length > 0 && (
+                    <BadgeDisplay badgeIds={player.badges} size="sm" />
+                  )}
+                </div>
               </td>
               <td className="text-center">
                 <span className={`badge ${

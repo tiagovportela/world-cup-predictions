@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { calculateBadges } from '../lib/badges'
 import Countdown from '../components/Countdown'
 import Leaderboard from '../components/Leaderboard'
 import RoundTabs from '../components/RoundTabs'
@@ -119,6 +120,7 @@ export default function Home() {
           results={results}
           showPredictions={deadlinePassed}
           onPlayerClick={deadlinePassed ? setSelectedPlayer : null}
+          games={roundData?.games || []}
         />
       </section>
 
