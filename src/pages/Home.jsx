@@ -1,12 +1,16 @@
-import { useState, useEffect } from 'react'
-import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore'
+import { useState, useEffect, useRef } from 'react'
+import { collection, onSnapshot, query, where, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { calculateBadges } from '../lib/badges'
+import { fetchWorldCupResults, matchResultsByTeams } from '../lib/footballApi'
 import Countdown from '../components/Countdown'
 import NextGame from '../components/NextGame'
 import Leaderboard from '../components/Leaderboard'
 import RoundTabs from '../components/RoundTabs'
 import PredictionsModal from '../components/PredictionsModal'
+
+// How often to re-check the API for new results while a tab stays open.
+const AUTO_FETCH_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 
 export default function Home() {
   const [rounds, setRounds] = useState([])
@@ -17,6 +21,13 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+
+  // Mirror latest results into a ref so the auto-fetch effect can read them
+  // without re-subscribing every time results change.
+  const resultsRef = useRef(results)
+  useEffect(() => {
+    resultsRef.current = results
+  }, [results])
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -72,6 +83,57 @@ export default function Home() {
     return () => unsubscribe()
   }, [activeRound])
 
+  // Stable signature of the game set — changes only when the round's games
+  // actually change, not on every results snapshot. Keeps the auto-fetch
+  // effect from re-running (and re-calling the API) on each results write.
+  const gamesKey = (roundData?.games || []).map(g => g.id || g.gameId).join('|')
+
+  // Auto-fetch real results when the page is open: pull finished WC matches,
+  // fill any games that don't yet have a result, and save back to Firestore.
+  // Idempotent — only writes when there's something new, so it won't loop.
+  useEffect(() => {
+    const games = roundData?.games
+    if (!activeRound || !games || games.length === 0) return
+
+    let cancelled = false
+
+    const syncResults = async () => {
+      try {
+        const { results: apiResults } = await fetchWorldCupResults()
+        if (cancelled || !apiResults || apiResults.length === 0) return
+
+        const matched = matchResultsByTeams(apiResults, games)
+        if (matched.length === 0) return
+
+        const current = resultsRef.current || []
+        // Only add results for games that don't already have one
+        const toAdd = matched.filter(m => {
+          const existing = current.find(r => r.gameId === m.gameId)
+          return !existing || existing.scoreA == null || existing.scoreB == null
+        })
+        if (toAdd.length === 0) return
+
+        const merged = [
+          ...current.filter(r => !toAdd.some(t => t.gameId === r.gameId)),
+          ...toAdd,
+        ]
+        await updateDoc(doc(db, 'rounds', activeRound), { results: merged })
+      } catch {
+        // Silent — e.g. no API key locally, or the function is unavailable.
+        // Manual entry in Admin remains the fallback.
+      }
+    }
+
+    syncResults()
+    const intervalId = setInterval(syncResults, AUTO_FETCH_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRound, gamesKey])
+
   if (error) {
     return (
       <main className="max-w-5xl mx-auto px-6 py-12">
@@ -117,7 +179,10 @@ export default function Home() {
       {deadline && <Countdown deadline={deadline} />}
 
       <section className="mb-12">
-        <h3 className="mb-8 text-lg font-600 uppercase tracking-wide">Leaderboard</h3>
+        <div className="flex items-baseline justify-between mb-8">
+          <h3 className="text-lg font-600 uppercase tracking-wide">Leaderboard</h3>
+          <span className="text-xs text-gray-500">⚡ Results update automatically</span>
+        </div>
         <Leaderboard
           roundId={activeRound}
           results={results}

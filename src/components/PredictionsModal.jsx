@@ -1,4 +1,5 @@
 import { scoreGame } from '../lib/scoring'
+import { exportPredictionsToExcel } from '../lib/excel'
 
 export default function PredictionsModal({ player, games, results, onClose }) {
   if (!player) return null
@@ -8,12 +9,20 @@ export default function PredictionsModal({ player, games, results, onClose }) {
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-300 p-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-black">{player.userName}'s Predictions</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-black text-2xl font-bold"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => exportPredictionsToExcel(player, games)}
+              className="bg-black text-white text-xs font-600 uppercase tracking-wide px-4 py-2 hover:bg-gray-800 transition-colors"
+            >
+              ⬇ Export Excel
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-600 hover:text-black text-2xl font-bold"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-4">

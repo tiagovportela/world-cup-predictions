@@ -21,3 +21,28 @@ export async function parseExcel(file) {
   }
   return games
 }
+
+// Download a player's predictions as an .xlsx file in the same layout as the
+// original Mundial 16.xlsx: Game#, Team A, Team B, Score A, Score B.
+export function exportPredictionsToExcel(player, games) {
+  const header = ['Game#', 'Team A', 'Team B', 'Score A', 'Score B']
+
+  const rows = games.map((game, index) => {
+    const gameId = game.id || game.gameId
+    const pred = (player.predictions || []).find(p => p.gameId === gameId)
+    return [
+      index + 1,
+      game.teamA,
+      game.teamB,
+      pred?.scoreA ?? '',
+      pred?.scoreB ?? '',
+    ]
+  })
+
+  const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows])
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Folha1')
+
+  const safeName = (player.userName || 'player').replace(/[^a-z0-9_-]+/gi, '_')
+  XLSX.writeFile(workbook, `${safeName}_Mundial16.xlsx`)
+}

@@ -1,66 +1,107 @@
-// Fetch World Cup results from api-football.com via RapidAPI
-// Free tier: 100 requests/day
+// Client-side helpers that talk to our Netlify function (which proxies
+// football-data.org server-side to avoid CORS and keep the key secret).
+//
+// Local dev: run `netlify dev` (not `npm run dev`) so the function is served.
+// Without the function/key, calls resolve to null and the UI falls back to
+// local data — no crashes.
 
-export async function fetchWorldCupResults(roundId) {
-  const apiKey = import.meta.env.VITE_RAPIDAPI_KEY
-  if (!apiKey) {
-    throw new Error(
-      'RapidAPI key not configured. Add VITE_RAPIDAPI_KEY to .env.local. ' +
-      'Sign up free at rapidapi.com and subscribe to api-football.com'
-    )
-  }
+const FUNCTION_URL = '/.netlify/functions/football'
 
-  // World Cup 2026 league ID (adjust if needed for your tournament)
-  const leagueId = 1 // FIFA World Cup
-  const season = 2026
+// Maps the Portuguese team names used in the Excel to the exact English
+// names football-data.org returns for the FIFA World Cup. Keys are
+// normalized (lowercase, accents stripped) — see normalize().
+const PT_TO_EN = {
+  'africa do sul': 'South Africa',
+  'canada': 'Canada',
+  'brasil': 'Brazil',
+  'japao': 'Japan',
+  'alemanha': 'Germany',
+  'paraguai': 'Paraguay',
+  'paises baixos': 'Netherlands',
+  'marrocos': 'Morocco',
+  'costa do marfim': 'Ivory Coast',
+  'noruega': 'Norway',
+  'franca': 'France',
+  'suecia': 'Sweden',
+  'mexico': 'Mexico',
+  'equador': 'Ecuador',
+  'inglaterra': 'England',
+  'congo': 'Congo DR',
+  'belgica': 'Belgium',
+  'senegal': 'Senegal',
+  'estados unidos': 'United States',
+  'bosnia': 'Bosnia-Herzegovina',
+  'espanha': 'Spain',
+  'austria': 'Austria',
+  'portugal': 'Portugal',
+  'croacia': 'Croatia',
+  'suica': 'Switzerland',
+  'argelia': 'Algeria',
+  'australia': 'Australia',
+  'egito': 'Egypt',
+  'argentina': 'Argentina',
+  'cabo verde': 'Cape Verde Islands',
+  'colombia': 'Colombia',
+  'gana': 'Ghana',
+}
 
-  const options = {
-    method: 'GET',
-    headers: {
-      'x-rapidapi-key': apiKey,
-      'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-    },
-  }
+function normalize(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip accents
+    .trim()
+}
 
-  try {
-    const response = await fetch(
-      `https://api-football-v1.p.rapidapi.com/v3/fixtures?league=${leagueId}&season=${season}&status=FT`,
-      options
-    )
+// Translate a Portuguese team name to its normalized English equivalent.
+// Falls back to the normalized original if not in the map.
+function toEnglish(ptName) {
+  const n = normalize(ptName)
+  return normalize(PT_TO_EN[n] || ptName)
+}
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        throw new Error('API rate limit exceeded (100 requests/day). Try again later.')
-      }
-      throw new Error(`API error: ${response.status}`)
+function namesMatch(a, b) {
+  return a.includes(b) || b.includes(a)
+}
+
+async function callFootballFunction(status) {
+  const response = await fetch(`${FUNCTION_URL}?status=${status}`)
+
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`
+    try {
+      const err = await response.json()
+      if (err?.error) detail = err.error
+    } catch {
+      // response wasn't JSON (e.g. plain Vite dev server with no function)
     }
+    throw new Error(detail)
+  }
 
-    const data = await response.json()
+  return response.json()
+}
 
-    if (!data.response || data.response.length === 0) {
+export async function fetchWorldCupResults() {
+  try {
+    const data = await callFootballFunction('FINISHED')
+
+    if (!data.matches || data.matches.length === 0) {
       return { results: [], message: 'No completed matches found yet.' }
     }
 
-    // Map API response to our result format
-    const results = data.response.map(match => {
-      // Try to match by team names
-      const gameId = `game_${data.response.indexOf(match) + 1}`
-
-      return {
-        gameId,
-        teamA: match.teams.home.name,
-        teamB: match.teams.away.name,
-        scoreA: match.goals.home,
-        scoreB: match.goals.away,
-        date: match.fixture.date,
-        status: match.fixture.status.short,
-      }
-    })
+    const results = data.matches.map(match => ({
+      teamA: match.homeTeam.name,
+      teamB: match.awayTeam.name,
+      scoreA: match.score?.fullTime?.home,
+      scoreB: match.score?.fullTime?.away,
+      date: match.utcDate,
+      status: match.status,
+    }))
 
     return {
       results,
       message: `Fetched ${results.length} completed matches`,
-      raw: data.response,
+      raw: data.matches,
     }
   } catch (error) {
     console.error('Football API error:', error)
@@ -69,26 +110,61 @@ export async function fetchWorldCupResults(roundId) {
 }
 
 export function matchResultsByTeams(apiResults, gameTeams) {
-  // Try to match API results to our games by team names (fuzzy matching)
+  // Translate each game's Portuguese names to English, then find an API
+  // fixture containing both teams (in either home/away orientation) and
+  // assign scores respecting that orientation.
   const matched = []
 
   for (const game of gameTeams) {
-    const match = apiResults.find(
-      r =>
-        (r.teamA.toLowerCase().includes(game.teamA.toLowerCase()) ||
-          game.teamA.toLowerCase().includes(r.teamA.toLowerCase())) &&
-        (r.teamB.toLowerCase().includes(game.teamB.toLowerCase()) ||
-          game.teamB.toLowerCase().includes(r.teamB.toLowerCase()))
-    )
+    const aEn = toEnglish(game.teamA)
+    const bEn = toEnglish(game.teamB)
+
+    const match = apiResults.find(r => {
+      if (r.scoreA == null || r.scoreB == null) return false
+      const rA = normalize(r.teamA)
+      const rB = normalize(r.teamB)
+      const sameOrder = namesMatch(rA, aEn) && namesMatch(rB, bEn)
+      const swapped = namesMatch(rA, bEn) && namesMatch(rB, aEn)
+      return sameOrder || swapped
+    })
 
     if (match) {
+      const rA = normalize(match.teamA)
+      const orientationSame = namesMatch(rA, aEn)
       matched.push({
         gameId: game.id || game.gameId,
-        scoreA: match.scoreA,
-        scoreB: match.scoreB,
+        scoreA: orientationSame ? match.scoreA : match.scoreB,
+        scoreB: orientationSame ? match.scoreB : match.scoreA,
       })
     }
   }
 
   return matched
+}
+
+export async function fetchNextWorldCupGame() {
+  try {
+    const data = await callFootballFunction('SCHEDULED')
+
+    if (!data.matches || data.matches.length === 0) {
+      return null
+    }
+
+    // Earliest upcoming match
+    const nextMatch = [...data.matches].sort(
+      (a, b) => new Date(a.utcDate) - new Date(b.utcDate)
+    )[0]
+
+    return {
+      id: `fixture_${nextMatch.id}`,
+      teamA: nextMatch.homeTeam.name,
+      teamB: nextMatch.awayTeam.name,
+      date: new Date(nextMatch.utcDate),
+      status: nextMatch.status,
+    }
+  } catch (error) {
+    // Silent fallback to local data — expected under plain `npm run dev`
+    console.warn('Next game from API unavailable, using local data:', error.message)
+    return null
+  }
 }

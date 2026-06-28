@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { collection, doc, getDoc, setDoc, query, where, getDocs, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { parseExcel } from '../lib/excel'
+import { parseExcel, exportPredictionsToExcel } from '../lib/excel'
 import MatchCard from '../components/MatchCard'
 
 export default function Submit() {
@@ -242,6 +242,12 @@ export default function Submit() {
               className="flex-1 bg-gray-200 text-black font-600 py-4 uppercase tracking-wide hover:bg-gray-300 transition-colors"
             >
               Back
+            </button>
+            <button
+              onClick={() => exportPredictionsToExcel({ userName, predictions }, games)}
+              className="flex-1 border-2 border-black text-black font-600 py-4 uppercase tracking-wide hover:bg-gray-100 transition-colors"
+            >
+              ⬇ Export Excel
             </button>
             <button
               onClick={handleSubmit}
