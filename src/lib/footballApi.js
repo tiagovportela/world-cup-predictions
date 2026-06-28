@@ -142,6 +142,33 @@ export function matchResultsByTeams(apiResults, gameTeams) {
   return matched
 }
 
+export async function fetchLiveWorldCupGame() {
+  try {
+    const data = await callFootballFunction('IN_PLAY,PAUSED')
+    if (!data.matches || data.matches.length === 0) {
+      return null
+    }
+
+    const m = [...data.matches].sort(
+      (a, b) => new Date(a.utcDate) - new Date(b.utcDate)
+    )[0]
+
+    return {
+      id: `fixture_${m.id}`,
+      teamA: m.homeTeam.name,
+      teamB: m.awayTeam.name,
+      scoreA: m.score?.fullTime?.home ?? 0,
+      scoreB: m.score?.fullTime?.away ?? 0,
+      minute: m.minute ?? null,
+      status: m.status, // IN_PLAY or PAUSED
+      live: true,
+    }
+  } catch (error) {
+    console.warn('Live match unavailable:', error.message)
+    return null
+  }
+}
+
 export async function fetchNextWorldCupGame() {
   try {
     const data = await callFootballFunction('SCHEDULED')

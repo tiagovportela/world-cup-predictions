@@ -17,8 +17,9 @@ function netlifyFunctionsDev(env) {
           if (env.FOOTBALL_DATA_KEY) {
             process.env.FOOTBALL_DATA_KEY = env.FOOTBALL_DATA_KEY
           }
+          // Cache-bust so edits to the function hot-reload in dev
           const fnUrl = new URL('./netlify/functions/football.mjs', import.meta.url)
-          const { default: handler } = await import(fnUrl.href)
+          const { default: handler } = await import(`${fnUrl.href}?t=${Date.now()}`)
 
           const request = new Request('http://localhost' + req.url, { method: req.method })
           const response = await handler(request)

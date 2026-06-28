@@ -24,9 +24,11 @@ export default async (req) => {
   const status = url.searchParams.get('status') || 'SCHEDULED'
   const competition = url.searchParams.get('competition') || 'WC'
 
-  // Whitelist allowed status values to avoid arbitrary passthrough
+  // Whitelist allowed status values to avoid arbitrary passthrough.
+  // Supports a single status or a comma-separated list (e.g. "IN_PLAY,PAUSED").
   const allowedStatus = ['SCHEDULED', 'TIMED', 'LIVE', 'IN_PLAY', 'PAUSED', 'FINISHED']
-  const safeStatus = allowedStatus.includes(status) ? status : 'SCHEDULED'
+  const parts = status.split(',').map(s => s.trim()).filter(s => allowedStatus.includes(s))
+  const safeStatus = parts.length > 0 ? parts.join(',') : 'SCHEDULED'
 
   try {
     const apiResponse = await fetch(

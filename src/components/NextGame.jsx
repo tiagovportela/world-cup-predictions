@@ -1,32 +1,77 @@
 import { useState, useEffect } from 'react'
-import { fetchNextWorldCupGame } from '../lib/footballApi'
+import { fetchNextWorldCupGame, fetchLiveWorldCupGame } from '../lib/footballApi'
+
+// How often to refresh the in-progress match score.
+const LIVE_POLL_MS = 45 * 1000 // 45 seconds
 
 export default function NextGame({ games = [], results = [] }) {
   const [apiGame, setApiGame] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [liveGame, setLiveGame] = useState(null)
 
-  // Fetch next game from API on mount
+  // Fetch the next upcoming match once on mount
   useEffect(() => {
-    const fetchGame = async () => {
-      const game = await fetchNextWorldCupGame()
-      setApiGame(game)
-      setLoading(false)
+    let cancelled = false
+    fetchNextWorldCupGame().then(game => {
+      if (!cancelled) setApiGame(game)
+    })
+    return () => {
+      cancelled = true
     }
-    fetchGame()
   }, [])
 
-  // Use API game if available, otherwise use local data
+  // Poll for a live (in-progress) match and keep its score fresh
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      const game = await fetchLiveWorldCupGame()
+      if (!cancelled) setLiveGame(game)
+    }
+    poll()
+    const intervalId = setInterval(poll, LIVE_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [])
+
+  // 1) A match is being played right now → show LIVE score
+  if (liveGame) {
+    const isHalfTime = liveGame.status === 'PAUSED'
+    return (
+      <div className="bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-600 p-8 rounded-lg mb-12">
+        <div className="text-center">
+          <p className="text-xs font-600 text-red-600 uppercase tracking-wide mb-4 flex items-center justify-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-red-600 pulse-red"></span>
+            {isHalfTime ? 'Half Time' : 'Live Now'}
+            {!isHalfTime && liveGame.minute ? ` · ${liveGame.minute}'` : ''}
+          </p>
+
+          <div className="flex items-center justify-center gap-6">
+            <div className="text-right flex-1">
+              <p className="text-lg font-bold text-black">{liveGame.teamA}</p>
+            </div>
+            <div className="text-5xl font-bold text-black px-4">
+              {liveGame.scoreA} - {liveGame.scoreB}
+            </div>
+            <div className="text-left flex-1">
+              <p className="text-lg font-bold text-black">{liveGame.teamB}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 2) Otherwise show the next upcoming match (API, else local fallback)
   let nextGame = apiGame
 
   if (!nextGame && (!games || games.length === 0)) return null
 
-  // Fallback to local data if no API game
   if (!nextGame) {
-    const localGame = games.find(game => {
+    nextGame = games.find(game => {
       const result = results.find(r => r.gameId === game.id || r.gameId === game.gameId)
       return !result
     })
-    nextGame = localGame
   }
 
   if (!nextGame) {
@@ -41,7 +86,6 @@ export default function NextGame({ games = [], results = [] }) {
     ? games.findIndex(g => g.id === nextGame.id || g.gameId === nextGame.gameId) + 1
     : null
 
-  // Format date if available from API
   const matchDate = nextGame.date ? new Date(nextGame.date) : null
   const dateString = matchDate
     ? matchDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -55,18 +99,15 @@ export default function NextGame({ games = [], results = [] }) {
         </p>
 
         <div className="flex items-center justify-center gap-8 mb-6">
-          {/* Team A */}
           <div className="text-right flex-1">
             <p className="text-lg font-bold text-black">{nextGame.teamA}</p>
             {gameNumber && <p className="text-sm text-blue-600 font-500">Match #{gameNumber}</p>}
           </div>
 
-          {/* VS */}
           <div className="flex items-center justify-center">
             <div className="text-3xl font-bold text-blue-500">VS</div>
           </div>
 
-          {/* Team B */}
           <div className="text-left flex-1">
             <p className="text-lg font-bold text-black">{nextGame.teamB}</p>
             {gameNumber && <p className="text-sm text-blue-600 font-500">Match #{gameNumber}</p>}
