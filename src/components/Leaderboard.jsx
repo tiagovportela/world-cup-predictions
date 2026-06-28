@@ -1,0 +1,92 @@
+import { useState, useEffect } from 'react'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { aggregateLeaderboard } from '../lib/scoring'
+
+export default function Leaderboard({ roundId, results, showPredictions = false }) {
+  const [leaderboard, setLeaderboard] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!roundId) {
+      setLeaderboard([])
+      setLoading(false)
+      return
+    }
+
+    const q = query(
+      collection(db, 'submissions'),
+      where('roundId', '==', roundId)
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const submissions = snapshot.docs.map(doc => ({ ...doc.data() }))
+        const ranked = aggregateLeaderboard(submissions, results)
+        setLeaderboard(ranked)
+        setLoading(false)
+      },
+      (error) => {
+        console.error('Leaderboard error:', error)
+        console.warn('Failed to load leaderboard. This may be a Firestore permissions issue.')
+        setLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [roundId, results])
+
+  if (loading) {
+    return <div className="text-center py-12 text-gray-500">Loading leaderboard...</div>
+  }
+
+  if (leaderboard.length === 0) {
+    return <div className="text-center py-12 text-gray-500">No submissions yet</div>
+  }
+
+  return (
+    <div className="border border-gray-300 overflow-hidden">
+      <table>
+        <thead>
+          <tr>
+            <th className="w-12 text-center">#</th>
+            <th className="text-left">Player</th>
+            <th className="w-32 text-center">Score</th>
+            {showPredictions && <th className="w-40">Predictions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {leaderboard.map((player, idx) => (
+            <tr key={`${player.userName}-${idx}`} className="hover:bg-gray-100 transition-colors">
+              <td className="text-center font-bold text-xl">
+                {idx === 0 && '🏆'}
+                {idx === 1 && '🥈'}
+                {idx === 2 && '🥉'}
+                {idx > 2 && <span className="text-gray-600">{idx + 1}</span>}
+              </td>
+              <td className="font-500 text-black">
+                {player.userName}
+              </td>
+              <td className="text-center">
+                <span className={`badge ${
+                  idx === 0 ? 'gold' :
+                  idx === 1 ? 'silver' :
+                  idx === 2 ? 'bronze' :
+                  ''
+                }`}>
+                  {player.totalScore}
+                </span>
+              </td>
+              {showPredictions && (
+                <td className="text-sm text-gray-600">
+                  {player.predictions?.length ? `${player.predictions.length} predictions` : '—'}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

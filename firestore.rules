@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rounds/{roundId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if true;
+      allow create: if request.resource.data.userName is string &&
+                       request.resource.data.roundId is string &&
+                       request.resource.data.predictions is list;
+      allow update: if resource.data.userName == request.resource.data.userName &&
+                       resource.data.roundId == request.resource.data.roundId;
+      allow delete: if false;
+    }
+  }
+}
+
