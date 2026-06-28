@@ -120,7 +120,6 @@ export default function NextGame({ games = [], results = [] }) {
           </p>
         )}
 
-        <p className="text-sm text-blue-600">Make your prediction on the Submit page</p>
       </div>
     </div>
   )
