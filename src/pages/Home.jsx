@@ -4,6 +4,7 @@ import { db } from '../lib/firebase'
 import Countdown from '../components/Countdown'
 import Leaderboard from '../components/Leaderboard'
 import RoundTabs from '../components/RoundTabs'
+import PredictionsModal from '../components/PredictionsModal'
 
 export default function Home() {
   const [rounds, setRounds] = useState([])
@@ -13,6 +14,7 @@ export default function Home() {
   const [deadlinePassed, setDeadlinePassed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedPlayer, setSelectedPlayer] = useState(null)
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -112,7 +114,12 @@ export default function Home() {
 
       <section className="mb-12">
         <h3 className="mb-8 text-lg font-600 uppercase tracking-wide">Leaderboard</h3>
-        <Leaderboard roundId={activeRound} results={results} showPredictions={deadlinePassed} />
+        <Leaderboard
+          roundId={activeRound}
+          results={results}
+          showPredictions={deadlinePassed}
+          onPlayerClick={deadlinePassed ? setSelectedPlayer : null}
+        />
       </section>
 
       {!deadlinePassed && (
@@ -120,6 +127,21 @@ export default function Home() {
           <p className="font-semibold mb-1">💡 Predictions are hidden until the deadline passes</p>
           <p className="text-sm">Submit your predictions and check the leaderboard after the deadline.</p>
         </div>
+      )}
+
+      {deadlinePassed && (
+        <div className="banner info">
+          <p className="font-semibold">👆 Click on any player name to view their predictions</p>
+        </div>
+      )}
+
+      {selectedPlayer && (
+        <PredictionsModal
+          player={selectedPlayer}
+          games={roundData?.games || []}
+          results={results}
+          onClose={() => setSelectedPlayer(null)}
+        />
       )}
     </main>
   )

@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { aggregateLeaderboard } from '../lib/scoring'
 
-export default function Leaderboard({ roundId, results, showPredictions = false }) {
+export default function Leaderboard({ roundId, results, showPredictions = false, onPlayerClick = null }) {
   const [leaderboard, setLeaderboard] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -58,7 +58,13 @@ export default function Leaderboard({ roundId, results, showPredictions = false 
         </thead>
         <tbody>
           {leaderboard.map((player, idx) => (
-            <tr key={`${player.userName}-${idx}`} className="hover:bg-gray-100 transition-colors">
+            <tr
+              key={`${player.userName}-${idx}`}
+              className={`hover:bg-gray-100 transition-colors ${
+                showPredictions && onPlayerClick ? 'cursor-pointer' : ''
+              }`}
+              onClick={() => showPredictions && onPlayerClick && onPlayerClick(player)}
+            >
               <td className="text-center font-bold text-xl">
                 {idx === 0 && '🏆'}
                 {idx === 1 && '🥈'}
@@ -66,7 +72,11 @@ export default function Leaderboard({ roundId, results, showPredictions = false 
                 {idx > 2 && <span className="text-gray-600">{idx + 1}</span>}
               </td>
               <td className="font-500 text-black">
-                {player.userName}
+                {showPredictions && onPlayerClick ? (
+                  <span className="hover:underline">{player.userName}</span>
+                ) : (
+                  player.userName
+                )}
               </td>
               <td className="text-center">
                 <span className={`badge ${
