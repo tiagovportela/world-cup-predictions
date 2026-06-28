@@ -167,10 +167,7 @@ export default function Home() {
     <main className="max-w-5xl mx-auto px-6 py-16">
       {rounds.length > 0 && <RoundTabs rounds={rounds} activeRound={activeRound} onRoundChange={setActiveRound} />}
 
-      <div className="mb-12">
-        <h2 className="mb-2">{roundData.name}</h2>
-        <p className="text-gray-600 text-sm uppercase tracking-wide">{roundData.games?.length || 0} Matches</p>
-      </div>
+      <div className="mb-12" />
 
       <NextGame games={roundData?.games || []} results={results} />
 
