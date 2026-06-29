@@ -66,15 +66,15 @@ export default function NextGame({ games = [], results = [], onMatchResolved = n
             {!isHalfTime && liveGame.minute ? ` · ${liveGame.minute}'` : ''}
           </p>
 
-          <div className="flex items-center justify-center gap-6">
+          <div className="flex items-center justify-center gap-3 sm:gap-6">
             <div className="text-right flex-1">
-              <p className="text-lg font-bold text-black">{liveGame.teamA}</p>
+              <p className="text-base sm:text-lg font-bold text-black">{liveGame.teamA}</p>
             </div>
-            <div className="text-5xl font-bold text-black px-4">
+            <div className="text-4xl sm:text-5xl font-bold text-black px-2 sm:px-4 whitespace-nowrap">
               {liveGame.scoreA} - {liveGame.scoreB}
             </div>
             <div className="text-left flex-1">
-              <p className="text-lg font-bold text-black">{liveGame.teamB}</p>
+              <p className="text-base sm:text-lg font-bold text-black">{liveGame.teamB}</p>
             </div>
           </div>
         </div>
