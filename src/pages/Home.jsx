@@ -9,6 +9,7 @@ import Leaderboard from '../components/Leaderboard'
 import RoundTabs from '../components/RoundTabs'
 import PredictionsModal from '../components/PredictionsModal'
 import MatchPredictionsModal from '../components/MatchPredictionsModal'
+import PredictionsMatrix from '../components/PredictionsMatrix'
 
 // How often to re-check the API for new results while a tab stays open.
 const AUTO_FETCH_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
@@ -204,6 +205,20 @@ export default function Home() {
           games={roundData?.games || []}
         />
       </section>
+
+      {deadlinePassed && (
+        <section className="mb-12">
+          <div className="flex items-baseline justify-between mb-8">
+            <h3 className="text-lg font-600 uppercase tracking-wide">All Predictions</h3>
+            <span className="text-xs text-gray-500">↔ Scroll to see every player</span>
+          </div>
+          <PredictionsMatrix
+            roundId={activeRound}
+            games={roundData?.games || []}
+            results={results}
+          />
+        </section>
+      )}
 
       {!deadlinePassed && (
         <div className="banner info">

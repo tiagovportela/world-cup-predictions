@@ -16,7 +16,7 @@ export default function Countdown({ deadline }) {
       if (diff <= 0) {
         setIsClosed(true)
         setIsActive(false)
-        setTimeLeft('SUBMISSIONS CLOSED')
+        setTimeLeft('')
         return
       }
 
@@ -35,12 +35,12 @@ export default function Countdown({ deadline }) {
     return () => clearInterval(interval)
   }, [deadline])
 
-  if (!deadline) return null
+  if (!deadline || isClosed) return null
 
   return (
-    <div className={`countdown ${isClosed ? 'closed' : isActive ? 'warning' : ''} ${isActive ? 'pulse-red' : ''}`}>
+    <div className={`countdown ${isActive ? 'warning pulse-red' : ''}`}>
       <div className="text-xs font-600 text-gray-600 uppercase tracking-wider mb-3">Deadline</div>
-      <div className={`text-4xl font-bold ${isClosed ? 'text-red-600' : isActive ? 'text-orange-600' : 'text-black'}`}>
+      <div className={`text-4xl font-bold ${isActive ? 'text-orange-600' : 'text-black'}`}>
         {timeLeft}
       </div>
     </div>
