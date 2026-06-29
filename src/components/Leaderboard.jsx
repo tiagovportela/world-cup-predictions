@@ -8,6 +8,7 @@ import BadgeDisplay from './BadgeDisplay'
 export default function Leaderboard({ roundId, results, showPredictions = false, onPlayerClick = null, games = [] }) {
   const [leaderboard, setLeaderboard] = useState([])
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     if (!roundId) {
@@ -54,6 +55,9 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
     return <div className="text-center py-12 text-gray-500">No submissions yet</div>
   }
 
+  const visible = expanded ? leaderboard : leaderboard.slice(0, 3)
+  const hiddenCount = leaderboard.length - visible.length
+
   return (
     <div className="border border-gray-300 overflow-hidden">
       <table>
@@ -67,7 +71,7 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
           </tr>
         </thead>
         <tbody>
-          {leaderboard.map((player, idx) => {
+          {visible.map((player, idx) => {
             const exactCount = (player.predictions || []).filter(p => {
               const r = results.find(x => x.gameId === p.gameId)
               return r && r.scoreA != null && r.scoreB != null &&
@@ -123,6 +127,14 @@ export default function Leaderboard({ roundId, results, showPredictions = false,
           })}
         </tbody>
       </table>
+      {leaderboard.length > 3 && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="w-full bg-gray-50 border-t border-gray-300 text-black font-600 text-xs uppercase tracking-wide py-3 hover:bg-gray-100 transition-colors"
+        >
+          {expanded ? '▲ Show less' : `▼ Show all ${leaderboard.length} players`}
+        </button>
+      )}
     </div>
   )
 }
