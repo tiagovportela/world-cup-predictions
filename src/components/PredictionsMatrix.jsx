@@ -103,6 +103,11 @@ export default function PredictionsMatrix({ roundId, games = [], results = [] })
 
   const fmt = (v) => (v == null ? '–' : v)
 
+  // Render a team name with each word on its own line, so multi-word names
+  // (e.g. "Costa do Marfim") stack vertically instead of crowding sideways.
+  const stackWords = (name) =>
+    (name || '').split(' ').flatMap((w, i) => (i === 0 ? [w] : [<br key={`br-${i}`} />, w]))
+
   return (
     <div
       ref={wrapperRef}
@@ -153,20 +158,18 @@ export default function PredictionsMatrix({ roundId, games = [], results = [] })
               return (
                 <tr key={id} style={{ background: rowBg }}>
                   <td
-                    className="sticky left-0 z-10 text-right font-500 text-black text-xs leading-tight pl-2 pr-0.5 py-1.5 w-[78px]"
-                    style={{ background: rowBg }}
-                  >
-                    {g.teamA}
-                  </td>
-                  <td
-                    className="sticky left-[78px] z-10 text-left font-500 text-black text-xs leading-tight pl-0.5 pr-2 py-1.5 w-[78px]"
+                    colSpan={2}
+                    className="sticky left-0 z-10 px-3 py-1.5"
                     style={{ background: rowBg, boxShadow: 'inset -1px 0 0 0 #d1d5db' }}
                   >
-                    {g.teamB}
+                    <div className="flex items-center justify-center gap-2 text-xs leading-tight">
+                      <span className="text-right font-500 text-black">{stackWords(g.teamA)}</span>
+                      <span className="text-left font-500 text-black">{stackWords(g.teamB)}</span>
+                    </div>
                   </td>
                   <td
                     colSpan={2}
-                    className="text-center font-bold text-black px-2 py-1.5 border-r border-gray-300"
+                    className="text-center font-bold text-black whitespace-nowrap px-2 py-1.5 border-r border-gray-300"
                     style={{ background: '#e5e7eb' }}
                   >
                     {result ? `${fmt(result.scoreA)}–${fmt(result.scoreB)}` : '–'}
@@ -178,7 +181,7 @@ export default function PredictionsMatrix({ roundId, games = [], results = [] })
                       <td
                         key={p.userName}
                         colSpan={2}
-                        className={`text-center text-black px-2 py-1.5 border-l border-gray-200 ${shade}`}
+                        className={`text-center text-black whitespace-nowrap px-2 py-1.5 border-l border-gray-200 ${shade}`}
                       >
                         {pred ? `${fmt(pred.scoreA)}–${fmt(pred.scoreB)}` : <span className="text-gray-300">·</span>}
                       </td>
