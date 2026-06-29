@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { scoreGame, calculatePlayerScore } from '../lib/scoring'
@@ -10,6 +10,40 @@ import { scoreGame, calculatePlayerScore } from '../lib/scoring'
 export default function PredictionsMatrix({ roundId, games = [], results = [] }) {
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const wrapperRef = useRef(null)
+
+  // Sync our state when the user leaves native fullscreen via Esc / system UI.
+  // On iOS Safari the Fullscreen API isn't available for non-video elements,
+  // so the layout is driven by the CSS overlay below and this simply never
+  // fires there — the overlay still works.
+  useEffect(() => {
+    const onChange = () => {
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+      if (!fsEl) setIsFullscreen(false)
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    document.addEventListener('webkitfullscreenchange', onChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange)
+      document.removeEventListener('webkitfullscreenchange', onChange)
+    }
+  }, [])
+
+  const toggleFullscreen = () => {
+    const el = wrapperRef.current
+    if (!isFullscreen) {
+      setIsFullscreen(true) // CSS overlay — works everywhere, incl. iPhone
+      // Best effort: also go true-fullscreen where supported (desktop, Android).
+      const req = el?.requestFullscreen || el?.webkitRequestFullscreen
+      if (req) Promise.resolve(req.call(el)).catch(() => {})
+    } else {
+      setIsFullscreen(false)
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+      const exit = document.exitFullscreen || document.webkitExitFullscreen
+      if (fsEl && exit) Promise.resolve(exit.call(document)).catch(() => {})
+    }
+  }
 
   useEffect(() => {
     if (!roundId) {
@@ -70,20 +104,32 @@ export default function PredictionsMatrix({ roundId, games = [], results = [] })
   const fmt = (v) => (v == null ? '–' : v)
 
   return (
-    <div>
-      <div className="border border-gray-300 overflow-x-auto">
+    <div
+      ref={wrapperRef}
+      className={isFullscreen ? 'fixed inset-0 z-50 bg-white p-4 flex flex-col' : ''}
+    >
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={toggleFullscreen}
+          className="border border-gray-300 text-black font-600 text-xs uppercase tracking-wide px-3 py-1.5 hover:bg-gray-100 transition-colors"
+        >
+          {isFullscreen ? '✕ Exit fullscreen' : '⛶ Fullscreen'}
+        </button>
+      </div>
+      <div className={`border border-gray-300 overflow-auto ${isFullscreen ? 'flex-1 min-h-0' : ''}`}>
         <table className="w-auto text-sm">
           <thead>
             <tr>
               <th
                 colSpan={2}
-                className="sticky left-0 z-30 bg-black text-white normal-case text-left whitespace-nowrap px-3 py-2"
+                className="sticky left-0 top-0 z-30 bg-black text-white normal-case text-left whitespace-nowrap px-3 py-2"
+                style={{ boxShadow: 'inset -1px 0 0 0 #4b5563' }}
               >
                 Match
               </th>
               <th
                 colSpan={2}
-                className="bg-black text-white normal-case text-center whitespace-nowrap px-2 py-2 border-l border-gray-600"
+                className="sticky top-0 z-20 bg-black text-white normal-case text-center whitespace-nowrap px-2 py-2"
               >
                 Result
               </th>
@@ -91,7 +137,7 @@ export default function PredictionsMatrix({ roundId, games = [], results = [] })
                 <th
                   key={p.userName}
                   colSpan={2}
-                  className="bg-black text-white normal-case text-center whitespace-nowrap px-2 py-2 border-l border-gray-600"
+                  className="sticky top-0 z-20 bg-black text-white normal-case text-center whitespace-nowrap px-2 py-2 border-l border-gray-600"
                 >
                   <div className="font-600">{p.userName}</div>
                   <div className="text-[10px] font-400 text-gray-300">{p.totalScore} pts</div>
@@ -107,22 +153,23 @@ export default function PredictionsMatrix({ roundId, games = [], results = [] })
               return (
                 <tr key={id} style={{ background: rowBg }}>
                   <td
-                    className="sticky left-0 z-10 text-right font-500 text-black whitespace-nowrap px-3 py-1.5 w-[120px]"
+                    className="sticky left-0 z-10 text-right font-500 text-black text-xs leading-tight pl-2 pr-0.5 py-1.5 w-[78px]"
                     style={{ background: rowBg }}
                   >
                     {g.teamA}
                   </td>
                   <td
-                    className="sticky left-[120px] z-10 text-left font-500 text-black whitespace-nowrap px-3 py-1.5 w-[120px] border-r border-gray-300"
-                    style={{ background: rowBg }}
+                    className="sticky left-[78px] z-10 text-left font-500 text-black text-xs leading-tight pl-0.5 pr-2 py-1.5 w-[78px]"
+                    style={{ background: rowBg, boxShadow: 'inset -1px 0 0 0 #d1d5db' }}
                   >
                     {g.teamB}
                   </td>
-                  <td className="text-center font-bold text-black px-2 py-1.5 bg-gray-100">
-                    {result ? fmt(result.scoreA) : '–'}
-                  </td>
-                  <td className="text-center font-bold text-black px-2 py-1.5 bg-gray-100 border-r border-gray-300">
-                    {result ? fmt(result.scoreB) : '–'}
+                  <td
+                    colSpan={2}
+                    className="text-center font-bold text-black px-2 py-1.5 border-r border-gray-300"
+                    style={{ background: '#e5e7eb' }}
+                  >
+                    {result ? `${fmt(result.scoreA)}–${fmt(result.scoreB)}` : '–'}
                   </td>
                   {players.map((p) => {
                     const pred = p.byGame[id]
