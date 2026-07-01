@@ -6,7 +6,7 @@ export default function PredictionsModal({ player, games, results, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[85vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-300 p-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-black">{player.userName}'s Predictions</h2>
           <div className="flex items-center gap-4">

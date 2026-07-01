@@ -34,7 +34,7 @@ export default function MatchPredictionsModal({ roundId, gameId, teamA, teamB, r
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-lg w-full max-h-96 overflow-y-auto">
+      <div className="bg-white rounded-lg max-w-lg w-full max-h-[85vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-300 p-6 flex justify-between items-start">
           <div>
             <h2 className="text-xl font-bold text-black">{teamA} vs {teamB}</h2>
