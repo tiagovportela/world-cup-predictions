@@ -5,67 +5,38 @@
 // Without the function/key, calls resolve to null and the UI falls back to
 // local data — no crashes.
 
+import { normalize, toEnglish, toPortuguese } from './teams'
+
 const FUNCTION_URL = '/.netlify/functions/football'
-
-// Maps the Portuguese team names used in the Excel to the exact English
-// names football-data.org returns for the FIFA World Cup. Keys are
-// normalized (lowercase, accents stripped) — see normalize().
-const PT_TO_EN = {
-  'africa do sul': 'South Africa',
-  'canada': 'Canada',
-  'brasil': 'Brazil',
-  'japao': 'Japan',
-  'alemanha': 'Germany',
-  'paraguai': 'Paraguay',
-  'paises baixos': 'Netherlands',
-  'marrocos': 'Morocco',
-  'costa do marfim': 'Ivory Coast',
-  'noruega': 'Norway',
-  'franca': 'France',
-  'suecia': 'Sweden',
-  'mexico': 'Mexico',
-  'equador': 'Ecuador',
-  'inglaterra': 'England',
-  'congo': 'Congo DR',
-  'belgica': 'Belgium',
-  'senegal': 'Senegal',
-  'estados unidos': 'United States',
-  'bosnia': 'Bosnia-Herzegovina',
-  'espanha': 'Spain',
-  'austria': 'Austria',
-  'portugal': 'Portugal',
-  'croacia': 'Croatia',
-  'suica': 'Switzerland',
-  'argelia': 'Algeria',
-  'australia': 'Australia',
-  'egito': 'Egypt',
-  'argentina': 'Argentina',
-  'cabo verde': 'Cape Verde Islands',
-  'colombia': 'Colombia',
-  'gana': 'Ghana',
-}
-
-function normalize(s) {
-  return (s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // strip accents
-    .trim()
-}
-
-// Translate a Portuguese team name to its normalized English equivalent.
-// Falls back to the normalized original if not in the map.
-function toEnglish(ptName) {
-  const n = normalize(ptName)
-  return normalize(PT_TO_EN[n] || ptName)
-}
 
 function namesMatch(a, b) {
   return a.includes(b) || b.includes(a)
 }
 
-async function callFootballFunction(status) {
-  const response = await fetch(`${FUNCTION_URL}?status=${status}`)
+// football-data.org bakes penalty shootout goals directly into `fullTime`
+// for matches decided by a shootout (e.g. a 1-1 draw settled 6-5 on penalties
+// is reported as fullTime 7-6) — see their "overtime" docs. Predictions here
+// are scored on the played result only, capped at 120 minutes, so strip the
+// shootout tally back out.
+function regulationScore(score) {
+  const full = score?.fullTime
+  if (!full || full.home == null || full.away == null) {
+    return { home: undefined, away: undefined }
+  }
+  if (score.duration !== 'PENALTY_SHOOTOUT') {
+    return full
+  }
+  const pens = score.penalties || {}
+  return {
+    home: full.home - (pens.home ?? 0),
+    away: full.away - (pens.away ?? 0),
+  }
+}
+
+async function callFootballFunction(status, stage) {
+  const params = new URLSearchParams({ status })
+  if (stage) params.set('stage', stage)
+  const response = await fetch(`${FUNCTION_URL}?${params.toString()}`)
 
   if (!response.ok) {
     let detail = `HTTP ${response.status}`
@@ -89,14 +60,17 @@ export async function fetchWorldCupResults() {
       return { results: [], message: 'No completed matches found yet.' }
     }
 
-    const results = data.matches.map(match => ({
-      teamA: match.homeTeam.name,
-      teamB: match.awayTeam.name,
-      scoreA: match.score?.fullTime?.home,
-      scoreB: match.score?.fullTime?.away,
-      date: match.utcDate,
-      status: match.status,
-    }))
+    const results = data.matches.map(match => {
+      const score = regulationScore(match.score)
+      return {
+        teamA: match.homeTeam.name,
+        teamB: match.awayTeam.name,
+        scoreA: score.home,
+        scoreB: score.away,
+        date: match.utcDate,
+        status: match.status,
+      }
+    })
 
     return {
       results,
@@ -171,12 +145,13 @@ export async function fetchLiveWorldCupGame() {
       (a, b) => new Date(a.utcDate) - new Date(b.utcDate)
     )[0]
 
+    const score = regulationScore(m.score)
     return {
       id: `fixture_${m.id}`,
       teamA: m.homeTeam.name,
       teamB: m.awayTeam.name,
-      scoreA: m.score?.fullTime?.home ?? 0,
-      scoreB: m.score?.fullTime?.away ?? 0,
+      scoreA: score.home ?? 0,
+      scoreB: score.away ?? 0,
       minute: m.minute ?? null,
       status: m.status, // IN_PLAY or PAUSED
       live: true,
@@ -211,5 +186,46 @@ export async function fetchNextWorldCupGame() {
     // Silent fallback to local data — expected under plain `npm run dev`
     console.warn('Next game from API unavailable, using local data:', error.message)
     return null
+  }
+}
+
+// Fetch the fixtures for a given knockout stage (e.g. 'QUARTER_FINALS') to
+// pre-populate a new round's games. Returns an empty `games` list (not an
+// error) when the bracket for that stage hasn't been published yet — that's
+// an expected state, not a failure.
+export async function fetchRoundFixtures(stage) {
+  try {
+    const data = await callFootballFunction('SCHEDULED,TIMED', stage)
+
+    if (!data.matches || data.matches.length === 0) {
+      return { games: [], deadline: null, message: 'No fixtures published yet for this stage.' }
+    }
+
+    const sorted = [...data.matches].sort(
+      (a, b) => new Date(a.utcDate) - new Date(b.utcDate)
+    )
+
+    // Fixtures whose bracket slot isn't decided yet (previous round still in
+    // progress) come back with a null team name — show "TBD" rather than
+    // guessing, so the admin knows to revisit that row once it's known.
+    const games = sorted.map((m, i) => ({
+      id: `game_${i + 1}`,
+      teamA: m.homeTeam?.name ? toPortuguese(m.homeTeam.name) : 'TBD',
+      teamB: m.awayTeam?.name ? toPortuguese(m.awayTeam.name) : 'TBD',
+    }))
+
+    const undecidedCount = games.filter(g => g.teamA === 'TBD' || g.teamB === 'TBD').length
+    const message = undecidedCount > 0
+      ? `Fetched ${games.length} fixtures from API — ${undecidedCount} matchup${undecidedCount === 1 ? '' : 's'} not decided yet (marked TBD)`
+      : `Fetched ${games.length} fixtures from API`
+
+    return {
+      games,
+      deadline: sorted[0].utcDate,
+      message,
+    }
+  } catch (error) {
+    console.error('Football API error:', error)
+    throw new Error(`Failed to fetch fixtures: ${error.message}`)
   }
 }

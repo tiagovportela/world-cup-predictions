@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { collection, doc, getDoc, setDoc, updateDoc, getDocs, query, where, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { fetchWorldCupResults, matchResultsByTeams } from '../lib/footballApi'
+import { fetchWorldCupResults, matchResultsByTeams, fetchRoundFixtures } from '../lib/footballApi'
+import { ROUND_SEQUENCE, sortRounds, getNextRound } from '../lib/rounds'
 import MatchCard from '../components/MatchCard'
 
 const WORLDCUP_R16_GAMES = [
@@ -23,6 +24,13 @@ const WORLDCUP_R16_GAMES = [
   { id: 'game_16', teamA: 'Colombia', teamB: 'Gana' },
 ]
 
+const STAGE_OPTIONS = ROUND_SEQUENCE.map(r => r.stage)
+
+function toDatetimeLocalValue(date) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 export default function Admin() {
   const [authenticated, setAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
@@ -33,6 +41,18 @@ export default function Admin() {
   const [newRound, setNewRound] = useState({ name: '', deadline: '', games: [] })
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [nextRoundGames, setNextRoundGames] = useState([{ teamA: '', teamB: '' }])
+  const [nextRoundDeadline, setNextRoundDeadline] = useState('')
+  const [nextRoundStage, setNextRoundStage] = useState('')
+  const [roundNameDraft, setRoundNameDraft] = useState('')
+
+  const nextRound = getNextRound(rounds)
+
+  useEffect(() => {
+    setNextRoundGames([{ teamA: '', teamB: '' }])
+    setNextRoundDeadline('')
+    setNextRoundStage(nextRound?.stage || '')
+  }, [nextRound?.id])
 
   useEffect(() => {
     const stored = localStorage.getItem('admin_auth')
@@ -58,11 +78,7 @@ export default function Admin() {
   const fetchRounds = async () => {
     try {
       const snapshot = await getDocs(collection(db, 'rounds'))
-      const roundsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      roundsList.sort((a, b) => {
-        const order = { 'r16': 0, 'qf': 1, 'sf': 2, 'final': 3 }
-        return (order[a.id] ?? 4) - (order[b.id] ?? 4)
-      })
+      const roundsList = sortRounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
       setRounds(roundsList)
       if (roundsList.length > 0 && !activeRound) {
         setActiveRound(roundsList[0].id)
@@ -83,6 +99,7 @@ export default function Admin() {
           const data = docSnap.data()
           setRoundData(data)
           setResults(data.results || [])
+          setRoundNameDraft(data.name || '')
         } else {
           setMessage('❌ Round not found')
         }
@@ -116,6 +133,23 @@ export default function Admin() {
       setMessage('✅ Results saved')
     } catch (error) {
       setMessage('❌ Error saving: ' + error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRenameRound = async () => {
+    if (!activeRound || !roundNameDraft.trim()) return
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      await updateDoc(doc(db, 'rounds', activeRound), { name: roundNameDraft.trim() })
+      setMessage('✅ Round renamed')
+      fetchRounds()
+    } catch (error) {
+      setMessage('❌ Error renaming: ' + error.message)
     } finally {
       setSaving(false)
     }
@@ -166,6 +200,76 @@ export default function Admin() {
 
       setMessage('✅ Round created')
       setNewRound({ name: '', deadline: '', games: [] })
+      fetchRounds()
+    } catch (error) {
+      setMessage('❌ Error: ' + error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleFetchNextRoundFixtures = async () => {
+    if (!nextRound) return
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      const { games, deadline, message: fetchMessage } = await fetchRoundFixtures(nextRoundStage)
+      if (games.length > 0) {
+        setNextRoundGames(games.map(g => ({ teamA: g.teamA, teamB: g.teamB })))
+        if (deadline) setNextRoundDeadline(toDatetimeLocalValue(new Date(deadline)))
+        setMessage(`✅ ${fetchMessage}`)
+      } else {
+        setMessage(`⚠️ ${fetchMessage}`)
+      }
+    } catch (error) {
+      setMessage('❌ ' + error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleNextRoundGameChange = (index, field, value) => {
+    setNextRoundGames(games => games.map((g, i) => (i === index ? { ...g, [field]: value } : g)))
+  }
+
+  const handleAddNextRoundGame = () => {
+    setNextRoundGames(games => [...games, { teamA: '', teamB: '' }])
+  }
+
+  const handleRemoveNextRoundGame = (index) => {
+    setNextRoundGames(games => games.filter((_, i) => i !== index))
+  }
+
+  const handleCreateNextRound = async () => {
+    if (!nextRound) return
+
+    const validGames = nextRoundGames
+      .filter(g => g.teamA.trim() && g.teamB.trim())
+      .map((g, i) => ({ id: `game_${i + 1}`, teamA: g.teamA.trim(), teamB: g.teamB.trim() }))
+
+    if (validGames.length === 0) {
+      setMessage('❌ Add at least one match')
+      return
+    }
+    if (!nextRoundDeadline) {
+      setMessage('❌ Set a deadline')
+      return
+    }
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      await setDoc(doc(db, 'rounds', nextRound.id), {
+        name: nextRound.name,
+        status: 'open',
+        deadline: Timestamp.fromDate(new Date(nextRoundDeadline)),
+        games: validGames,
+        results: [],
+      })
+      setMessage(`✅ ${nextRound.name} created`)
       fetchRounds()
     } catch (error) {
       setMessage('❌ Error: ' + error.message)
@@ -322,6 +426,96 @@ export default function Admin() {
         </div>
       </section>
 
+      <section className="mb-16">
+        <h2 className="mb-8 text-lg font-600 uppercase tracking-wide">Create Next Round</h2>
+        {!nextRound || nextRound.id === 'r16' ? (
+          <p className="text-sm text-gray-600">
+            {nextRound ? 'Use "Initialize R16" above to create the first round.' : 'All rounds have been created.'}
+          </p>
+        ) : (
+          <div className="border border-gray-300 p-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <div>
+                <h3 className="font-600 text-sm uppercase tracking-wide text-gray-700">{nextRound.name}</h3>
+                <p className="text-sm text-gray-600">Fetch fixtures from the API, or add matches manually below</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  value={nextRoundStage}
+                  onChange={(e) => setNextRoundStage(e.target.value)}
+                  className="text-sm"
+                >
+                  {STAGE_OPTIONS.map(stage => (
+                    <option key={stage} value={stage}>{stage}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleFetchNextRoundFixtures}
+                  disabled={saving}
+                  className="bg-blue-600 text-white px-6 py-3 font-600 text-sm uppercase tracking-wide hover:bg-blue-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                >
+                  {saving ? 'Fetching...' : '🔄 Fetch Fixtures'}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              {nextRoundGames.map((game, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <input
+                    type="text"
+                    value={game.teamA}
+                    onChange={(e) => handleNextRoundGameChange(i, 'teamA', e.target.value)}
+                    placeholder="Team A"
+                    className="flex-1"
+                  />
+                  <span className="text-gray-400">vs</span>
+                  <input
+                    type="text"
+                    value={game.teamB}
+                    onChange={(e) => handleNextRoundGameChange(i, 'teamB', e.target.value)}
+                    placeholder="Team B"
+                    className="flex-1"
+                  />
+                  <button
+                    onClick={() => handleRemoveNextRoundGame(i)}
+                    disabled={nextRoundGames.length === 1}
+                    className="text-red-600 hover:text-red-800 disabled:opacity-30 px-2"
+                    aria-label="Remove match"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={handleAddNextRoundGame}
+                className="text-sm text-gray-600 hover:text-black underline"
+              >
+                + Add match
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-black font-600 text-sm uppercase tracking-wide mb-3">Deadline</label>
+              <input
+                type="datetime-local"
+                value={nextRoundDeadline}
+                onChange={(e) => setNextRoundDeadline(e.target.value)}
+                className="w-full md:w-64"
+              />
+            </div>
+
+            <button
+              onClick={handleCreateNextRound}
+              disabled={saving}
+              className="w-full md:w-auto bg-black text-white font-600 py-4 px-8 uppercase tracking-wide hover:bg-gray-800 transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Creating...' : `Create ${nextRound.name}`}
+            </button>
+          </div>
+        )}
+      </section>
+
       {rounds.length > 0 && (
         <section className="mb-16">
           <h2 className="mb-8 text-lg font-600 uppercase tracking-wide">Manage Results</h2>
@@ -337,6 +531,27 @@ export default function Admin() {
               ))}
             </select>
           </div>
+
+          {activeRound && (
+            <div className="mb-8">
+              <label className="block text-black font-600 text-sm uppercase tracking-wide mb-3">Round Name</label>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={roundNameDraft}
+                  onChange={(e) => setRoundNameDraft(e.target.value)}
+                  className="w-full md:w-64"
+                />
+                <button
+                  onClick={handleRenameRound}
+                  disabled={saving || !roundNameDraft.trim() || roundNameDraft.trim() === roundData?.name}
+                  className="bg-gray-800 text-white px-6 py-3 font-600 text-sm uppercase tracking-wide hover:bg-black transition-colors disabled:opacity-50 whitespace-nowrap"
+                >
+                  Save Name
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 

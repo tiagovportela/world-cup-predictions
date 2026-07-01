@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where, getDocs, doc, updateDoc } from 'f
 import { db } from '../lib/firebase'
 import { calculateBadges } from '../lib/badges'
 import { fetchWorldCupResults, matchResultsByTeams } from '../lib/footballApi'
+import { sortRounds } from '../lib/rounds'
 import Countdown from '../components/Countdown'
 import NextGame from '../components/NextGame'
 import Leaderboard from '../components/Leaderboard'
@@ -37,12 +38,8 @@ export default function Home() {
     const unsubscribe = onSnapshot(
       collection(db, 'rounds'),
       (snapshot) => {
-        const roundsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        const roundsList = sortRounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
         if (roundsList.length > 0) {
-          roundsList.sort((a, b) => {
-            const order = { 'r16': 0, 'qf': 1, 'sf': 2, 'final': 3 }
-            return (order[a.id] ?? 4) - (order[b.id] ?? 4)
-          })
           setRounds(roundsList)
           if (!activeRound || !roundsList.find(r => r.id === activeRound)) {
             setActiveRound(roundsList[0].id)

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { collection, doc, getDoc, setDoc, query, where, getDocs, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { parseExcel, exportPredictionsToExcel } from '../lib/excel'
+import { sortRounds } from '../lib/rounds'
 import MatchCard from '../components/MatchCard'
 
 export default function Submit() {
@@ -22,11 +23,7 @@ export default function Submit() {
     const fetchRounds = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'rounds'))
-        const roundsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-        roundsList.sort((a, b) => {
-          const order = { 'r16': 0, 'qf': 1, 'sf': 2, 'final': 3 }
-          return (order[a.id] ?? 4) - (order[b.id] ?? 4)
-        })
+        const roundsList = sortRounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
         setRounds(roundsList)
         if (roundsList.length > 0) {
           setActiveRound(roundsList[0].id)

@@ -23,6 +23,7 @@ export default async (req) => {
   const url = new URL(req.url)
   const status = url.searchParams.get('status') || 'SCHEDULED'
   const competition = url.searchParams.get('competition') || 'WC'
+  const stage = url.searchParams.get('stage')
 
   // Whitelist allowed status values to avoid arbitrary passthrough.
   // Supports a single status or a comma-separated list (e.g. "IN_PLAY,PAUSED").
@@ -30,9 +31,13 @@ export default async (req) => {
   const parts = status.split(',').map(s => s.trim()).filter(s => allowedStatus.includes(s))
   const safeStatus = parts.length > 0 ? parts.join(',') : 'SCHEDULED'
 
+  // Whitelist allowed knockout stage values; drop silently if not recognized.
+  const allowedStages = ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL']
+  const stageQuery = allowedStages.includes(stage) ? `&stage=${stage}` : ''
+
   try {
     const apiResponse = await fetch(
-      `https://api.football-data.org/v4/competitions/${competition}/matches?status=${safeStatus}`,
+      `https://api.football-data.org/v4/competitions/${competition}/matches?status=${safeStatus}${stageQuery}`,
       { headers: { 'X-Auth-Token': apiKey } }
     )
 
