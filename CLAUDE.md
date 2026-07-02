@@ -111,7 +111,8 @@ src/
 - Read: anyone (public leaderboard)
 - Write submissions: must have userName, roundId, predictions
 - Update submissions: only if userName/roundId unchanged (prevents tampering)
-- No deletes (prevents accidental loss)
+- Delete rounds: allowed (admin can remove a round from the panel)
+- No submission deletes (prevents accidental loss)
 
 **Security notes:**
 - No user authentication; client-side password only for admin

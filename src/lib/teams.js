@@ -2,39 +2,42 @@
 // Portuguese display names used throughout this app (Excel predictions,
 // Firestore game docs) mapped to the English names football-data.org returns.
 
+// `iso` is the ISO 3166-1 alpha-2 code used to build the flag emoji.
+// England has no ISO code of its own (it isn't a sovereign country) — GB
+// (Union Jack) is used as a pragmatic stand-in.
 export const WORLDCUP_TEAMS = [
-  { pt: 'Africa do Sul', en: 'South Africa' },
-  { pt: 'Canada', en: 'Canada' },
-  { pt: 'Brasil', en: 'Brazil' },
-  { pt: 'Japao', en: 'Japan' },
-  { pt: 'Alemanha', en: 'Germany' },
-  { pt: 'Paraguai', en: 'Paraguay' },
-  { pt: 'Paises Baixos', en: 'Netherlands' },
-  { pt: 'Marrocos', en: 'Morocco' },
-  { pt: 'Costa do Marfim', en: 'Ivory Coast' },
-  { pt: 'Noruega', en: 'Norway' },
-  { pt: 'França', en: 'France' },
-  { pt: 'Suécia', en: 'Sweden' },
-  { pt: 'Mexico', en: 'Mexico' },
-  { pt: 'Equador', en: 'Ecuador' },
-  { pt: 'Inglaterra', en: 'England' },
-  { pt: 'Congo', en: 'Congo DR' },
-  { pt: 'Belgica', en: 'Belgium' },
-  { pt: 'Senegal', en: 'Senegal' },
-  { pt: 'Estados Unidos', en: 'United States' },
-  { pt: 'Bosnia', en: 'Bosnia-Herzegovina' },
-  { pt: 'Espanha', en: 'Spain' },
-  { pt: 'Austria', en: 'Austria' },
-  { pt: 'Portugal', en: 'Portugal' },
-  { pt: 'Croacia', en: 'Croatia' },
-  { pt: 'Suiça', en: 'Switzerland' },
-  { pt: 'Argélia', en: 'Algeria' },
-  { pt: 'Australia', en: 'Australia' },
-  { pt: 'Egito', en: 'Egypt' },
-  { pt: 'Argentina', en: 'Argentina' },
-  { pt: 'Cabo Verde', en: 'Cape Verde Islands' },
-  { pt: 'Colombia', en: 'Colombia' },
-  { pt: 'Gana', en: 'Ghana' },
+  { pt: 'Africa do Sul', en: 'South Africa', iso: 'ZA' },
+  { pt: 'Canada', en: 'Canada', iso: 'CA' },
+  { pt: 'Brasil', en: 'Brazil', iso: 'BR' },
+  { pt: 'Japao', en: 'Japan', iso: 'JP' },
+  { pt: 'Alemanha', en: 'Germany', iso: 'DE' },
+  { pt: 'Paraguai', en: 'Paraguay', iso: 'PY' },
+  { pt: 'Paises Baixos', en: 'Netherlands', iso: 'NL' },
+  { pt: 'Marrocos', en: 'Morocco', iso: 'MA' },
+  { pt: 'Costa do Marfim', en: 'Ivory Coast', iso: 'CI' },
+  { pt: 'Noruega', en: 'Norway', iso: 'NO' },
+  { pt: 'França', en: 'France', iso: 'FR' },
+  { pt: 'Suécia', en: 'Sweden', iso: 'SE' },
+  { pt: 'Mexico', en: 'Mexico', iso: 'MX' },
+  { pt: 'Equador', en: 'Ecuador', iso: 'EC' },
+  { pt: 'Inglaterra', en: 'England', iso: 'GB' },
+  { pt: 'Congo', en: 'Congo DR', iso: 'CD' },
+  { pt: 'Belgica', en: 'Belgium', iso: 'BE' },
+  { pt: 'Senegal', en: 'Senegal', iso: 'SN' },
+  { pt: 'Estados Unidos', en: 'United States', iso: 'US' },
+  { pt: 'Bosnia', en: 'Bosnia-Herzegovina', iso: 'BA' },
+  { pt: 'Espanha', en: 'Spain', iso: 'ES' },
+  { pt: 'Austria', en: 'Austria', iso: 'AT' },
+  { pt: 'Portugal', en: 'Portugal', iso: 'PT' },
+  { pt: 'Croacia', en: 'Croatia', iso: 'HR' },
+  { pt: 'Suiça', en: 'Switzerland', iso: 'CH' },
+  { pt: 'Argélia', en: 'Algeria', iso: 'DZ' },
+  { pt: 'Australia', en: 'Australia', iso: 'AU' },
+  { pt: 'Egito', en: 'Egypt', iso: 'EG' },
+  { pt: 'Argentina', en: 'Argentina', iso: 'AR' },
+  { pt: 'Cabo Verde', en: 'Cape Verde Islands', iso: 'CV' },
+  { pt: 'Colombia', en: 'Colombia', iso: 'CO' },
+  { pt: 'Gana', en: 'Ghana', iso: 'GH' },
 ]
 
 export function normalize(s) {
@@ -68,4 +71,19 @@ export function toPortuguese(enName) {
   const n = normalize(enName)
   const found = WORLDCUP_TEAMS.find(t => namesMatch(normalize(t.en), n))
   return found ? found.pt : enName
+}
+
+// ISO 3166-1 alpha-2 code -> flag emoji (two regional indicator symbols).
+function isoToFlagEmoji(iso) {
+  return iso
+    .toUpperCase()
+    .replace(/./g, (c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+}
+
+// Flag emoji for a team name (Portuguese or English). Falls back to a
+// neutral flag when the team isn't recognized (e.g. a "TBD" placeholder).
+export function getFlag(teamName) {
+  const n = normalize(teamName)
+  const found = WORLDCUP_TEAMS.find(t => normalize(t.pt) === n || namesMatch(normalize(t.en), n))
+  return found ? isoToFlagEmoji(found.iso) : '🏳️'
 }

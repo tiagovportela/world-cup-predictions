@@ -4,7 +4,14 @@ service cloud.firestore {
     match /rounds/{roundId} {
       allow read: if true;
       allow create, update: if true;
-      allow delete: if false;
+      // Admin can remove a round (client-side admin gate only, friends-only app).
+      allow delete: if true;
+    }
+
+    // Editable app config (e.g. group-stage standings), managed from Admin.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if true;
     }
 
     match /submissions/{submissionId} {

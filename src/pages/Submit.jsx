@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import { collection, doc, getDoc, setDoc, query, where, getDocs, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { parseExcel, exportPredictionsToExcel } from '../lib/excel'
-import { sortRounds } from '../lib/rounds'
+import { sortRounds, isRoundOpen } from '../lib/rounds'
 import MatchCard from '../components/MatchCard'
 
 export default function Submit() {
   const [step, setStep] = useState('name')
   const [userName, setUserName] = useState('')
   const [file, setFile] = useState(null)
+  const [manualIndex, setManualIndex] = useState(0)
   const [rounds, setRounds] = useState([])
   const [activeRound, setActiveRound] = useState(null)
   const [roundData, setRoundData] = useState(null)
@@ -23,10 +24,13 @@ export default function Submit() {
     const fetchRounds = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'rounds'))
-        const roundsList = sortRounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
-        setRounds(roundsList)
-        if (roundsList.length > 0) {
-          setActiveRound(roundsList[0].id)
+        const allRounds = sortRounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+        const openRounds = allRounds.filter(isRoundOpen)
+        setRounds(openRounds)
+        if (openRounds.length > 0) {
+          setActiveRound(openRounds[0].id)
+        } else if (allRounds.length > 0) {
+          setMessage('❌ No rounds are currently open for submission.')
         } else {
           setMessage('❌ No rounds available. Ask an admin to initialize a round.')
         }
@@ -60,7 +64,8 @@ export default function Submit() {
 
         setDeadlinePassed(false)
         setGames(data.games || [])
-        setPredictions((data.games || []).map(g => ({ gameId: g.id || g.gameId, scoreA: null, scoreB: null })))
+        setPredictions((data.games || []).map(g => ({ gameId: g.id || g.gameId, scoreA: 0, scoreB: 0 })))
+        setStep(prev => (prev === 'closed' ? 'name' : prev))
       }
     }
     fetchRoundData()
@@ -149,9 +154,24 @@ export default function Submit() {
   if (step === 'closed') {
     return (
       <main className="max-w-4xl mx-auto px-6 py-12">
-        <div className="banner error">
+        <div className="banner error mb-8">
           <p className="text-lg font-semibold">{message}</p>
         </div>
+
+        {rounds.length > 1 && (
+          <div className="border border-gray-300 p-8">
+            <label className="block text-black font-600 text-sm uppercase tracking-wide mb-3">Try a Different Round</label>
+            <select
+              value={activeRound || ''}
+              onChange={(e) => setActiveRound(e.target.value)}
+              className="w-full"
+            >
+              {rounds.map(r => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </main>
     )
   }
@@ -192,24 +212,81 @@ export default function Submit() {
             </select>
           </div>
 
-          <div className="mb-8">
-            <label className="block text-black font-600 text-sm uppercase tracking-wide mb-3">Upload Excel File</label>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileChange}
-              className="w-full border-2 border-dashed border-gray-300 p-6 cursor-pointer hover:border-black transition-colors"
-            />
-            <p className="text-xs text-gray-500 mt-2">Accepted formats: .xlsx, .xls</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-black font-600 text-sm uppercase tracking-wide mb-3">Upload Excel File</label>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileChange}
+                className="w-full border-2 border-dashed border-gray-300 p-6 cursor-pointer hover:border-black transition-colors"
+              />
+              <p className="text-xs text-gray-500 mt-2">Accepted formats: .xlsx, .xls</p>
+            </div>
+
+            <div className="flex flex-col">
+              <label className="block text-black font-600 text-sm uppercase tracking-wide mb-3">Or Enter Manually</label>
+              <button
+                onClick={() => {
+                  setManualIndex(0)
+                  setStep('manual')
+                }}
+                disabled={!userName.trim() || !activeRound || games.length === 0}
+                className="flex-1 border-2 border-black text-black font-600 py-6 uppercase tracking-wide hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Enter Predictions Manually
+              </button>
+              <p className="text-xs text-gray-500 mt-2">Predict one match at a time</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 'manual' && games.length > 0 && (
+        <div>
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="text-lg font-600 uppercase tracking-wide">
+              Match {manualIndex + 1} of {games.length}
+            </h2>
+            <button
+              onClick={() => setStep('name')}
+              className="text-sm text-gray-600 hover:text-black underline"
+            >
+              Change name/round
+            </button>
           </div>
 
-          <button
-            onClick={() => setStep('preview')}
-            disabled={!userName.trim() || !file || predictions.length === 0}
-            className="w-full bg-black text-white font-600 py-4 uppercase tracking-wide hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Next: Review Predictions
-          </button>
+          <MatchCard
+            game={games[manualIndex]}
+            prediction={predictions[manualIndex]}
+            isEditable={true}
+            onPredictionChange={(newPred) => handlePredictionChange(manualIndex, newPred)}
+          />
+
+          <div className="flex gap-4 mt-8">
+            <button
+              onClick={() => setManualIndex(i => Math.max(0, i - 1))}
+              disabled={manualIndex === 0}
+              className="flex-1 bg-gray-200 text-black font-600 py-4 uppercase tracking-wide hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            {manualIndex < games.length - 1 ? (
+              <button
+                onClick={() => setManualIndex(i => Math.min(games.length - 1, i + 1))}
+                className="flex-1 bg-black text-white font-600 py-4 uppercase tracking-wide hover:bg-gray-800 transition-colors"
+              >
+                Next Match
+              </button>
+            ) : (
+              <button
+                onClick={() => setStep('preview')}
+                className="flex-1 bg-black text-white font-600 py-4 uppercase tracking-wide hover:bg-gray-800 transition-colors"
+              >
+                Review & Submit
+              </button>
+            )}
+          </div>
         </div>
       )}
 

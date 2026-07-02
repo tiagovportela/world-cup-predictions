@@ -4,9 +4,12 @@ import { db } from '../lib/firebase'
 import { calculateBadges } from '../lib/badges'
 import { fetchWorldCupResults, matchResultsByTeams } from '../lib/footballApi'
 import { sortRounds } from '../lib/rounds'
+import { GROUP_STAGE_COLLECTION, GROUP_STAGE_DOC_ID, DEFAULT_GROUP_STAGE_STANDINGS } from '../lib/groupStage'
 import Countdown from '../components/Countdown'
 import NextGame from '../components/NextGame'
 import Leaderboard from '../components/Leaderboard'
+import OverallStandings from '../components/OverallStandings'
+import GroupStageStandings from '../components/GroupStageStandings'
 import RoundTabs from '../components/RoundTabs'
 import PredictionsModal from '../components/PredictionsModal'
 import MatchPredictionsModal from '../components/MatchPredictionsModal'
@@ -18,6 +21,10 @@ const AUTO_FETCH_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 export default function Home() {
   const [rounds, setRounds] = useState([])
   const [activeRound, setActiveRound] = useState(null)
+  const [view, setView] = useState('round') // 'round' | 'overall' | 'group'
+  // Group-stage standings from Firestore; falls back to defaults until seeded.
+  const [groupStandings, setGroupStandings] = useState(DEFAULT_GROUP_STAGE_STANDINGS)
+  const [groupCoefficient, setGroupCoefficient] = useState(1)
   const [roundData, setRoundData] = useState(null)
   const [results, setResults] = useState([])
   const [deadlinePassed, setDeadlinePassed] = useState(false)
@@ -54,6 +61,23 @@ export default function Home() {
       }
     )
 
+    return () => unsubscribe()
+  }, [])
+
+  // Live group-stage standings. If the config doc isn't there yet (or reads are
+  // blocked before rules deploy), keep the built-in defaults so Overall/Group
+  // still render.
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, GROUP_STAGE_COLLECTION, GROUP_STAGE_DOC_ID),
+      (snapshot) => {
+        const data = snapshot.exists() ? snapshot.data() : {}
+        const standings = data.standings
+        setGroupStandings(standings && standings.length ? standings : DEFAULT_GROUP_STAGE_STANDINGS)
+        setGroupCoefficient(data.coefficient ?? 1)
+      },
+      (err) => console.warn('Group-stage standings unavailable, using defaults:', err.message)
+    )
     return () => unsubscribe()
   }, [])
 
@@ -166,10 +190,43 @@ export default function Home() {
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-16">
-      {rounds.length > 0 && <RoundTabs rounds={rounds} activeRound={activeRound} onRoundChange={setActiveRound} />}
+      {rounds.length > 0 && (
+        <RoundTabs
+          rounds={rounds}
+          activeRound={activeRound}
+          onRoundChange={(id) => { setView('round'); setActiveRound(id) }}
+          roundsActive={view === 'round'}
+          extraTabs={[
+            { key: 'overall', label: '🏆 Overall', active: view === 'overall', onClick: () => setView('overall') },
+            { key: 'group', label: 'Group Stage', active: view === 'group', onClick: () => setView('group') },
+          ]}
+        />
+      )}
 
       <div className="mb-12" />
 
+      {view === 'overall' && (
+        <section className="mb-12">
+          <div className="flex items-baseline justify-between mb-8">
+            <h3 className="text-lg font-600 uppercase tracking-wide">Overall Standings</h3>
+            <span className="text-xs text-gray-500">Group stage + all knockout rounds</span>
+          </div>
+          <OverallStandings rounds={rounds} groupStandings={groupStandings} groupCoefficient={groupCoefficient} />
+        </section>
+      )}
+
+      {view === 'group' && (
+        <section className="mb-12">
+          <div className="flex items-baseline justify-between mb-8">
+            <h3 className="text-lg font-600 uppercase tracking-wide">Group Stage</h3>
+            <span className="text-xs text-gray-500">Final standings · 72 games</span>
+          </div>
+          <GroupStageStandings standings={groupStandings} />
+        </section>
+      )}
+
+      {view === 'round' && (
+      <>
       <NextGame
         games={roundData?.games || []}
         results={results}
@@ -248,6 +305,8 @@ export default function Home() {
           result={results.find(r => r.gameId === nextMatch.gameId) || null}
           onClose={() => setShowMatchPredictions(false)}
         />
+      )}
+      </>
       )}
     </main>
   )

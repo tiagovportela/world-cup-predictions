@@ -25,3 +25,11 @@ export function getNextRound(existingRounds) {
   const existingIds = new Set(existingRounds.map(r => r.id))
   return ROUND_SEQUENCE.find(r => !existingIds.has(r.id)) || null
 }
+
+// Whether a round's submission deadline hasn't passed yet. Rounds without a
+// deadline are treated as always open.
+export function isRoundOpen(round) {
+  if (!round?.deadline) return true
+  const deadlineMs = round.deadline.toMillis?.() ?? round.deadline
+  return Date.now() <= deadlineMs
+}

@@ -99,6 +99,17 @@ input::placeholder {
   color: #999;
 }
 
+/* Hide native number spinner — replaced by custom +/- buttons (MatchCard) */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner {
+  -moz-appearance: textfield;
+}
+
 /* Match Card - Swiss Style */
 .match-card {
   border: 1px solid #e0e0e0;
